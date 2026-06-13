@@ -11,6 +11,10 @@
 #include "logger.h"
 #include "secureQSettings.h"
 
+// ✅ تغییر ۱: include فایل جدید pingController
+// کامپایلر باید بدونه کلاس PingController کجاست
+#include "core/controllers/pingController.h"
+
 #if defined(Q_OS_ANDROID)
     #include "core/utils/installedAppsImageProvider.h"
     #include "platforms/android/android_controller.h"
@@ -230,6 +234,18 @@ void CoreController::initControllers()
 
     m_updateUiController = new UpdateUiController(m_updateController, this);
     setQmlContextProperty("UpdateController", m_updateUiController);
+
+    // ✅ تغییر ۲: ساختن PingController و معرفی آن به QML
+    // این کنترلر همه سرورها را موازی ping می‌زند
+    // "PingController" همان نامی است که در QML می‌نویسیم: PingController.pingAll()
+    m_pingController = new PingController(m_serversRepository, this);
+    setQmlContextProperty("PingController", m_pingController);
+
+    // 1.5 ثانیه بعد از اجرای برنامه، اولین ping شروع می‌شود
+    // (صبر می‌کنیم تا UI کامل لود شود)
+    QTimer::singleShot(1500, m_pingController, [this]() {
+        m_pingController->startAutoRefresh();
+    });
 }
 
 void CoreController::initAndroidController()
