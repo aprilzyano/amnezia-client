@@ -34,6 +34,19 @@ ListViewType {
         }
     }
 
+    // هنگامی که ping همه سرورها تمام شد، لیست را refresh کن
+    Connections {
+        target: PingController
+        function onPingResultUpdated(serverId, pingMs) {
+            root.model = null
+            root.model = ServersModel
+        }
+        function onPingAllFinished(bestServerId) {
+            root.model = null
+            root.model = ServersModel
+        }
+    }
+
     delegate: Item {
         id: menuContentDelegate
         objectName: "menuContentDelegate"
@@ -85,13 +98,61 @@ ListViewType {
                         }
 
                         root.selectedIndex = index
-
                         ServersUiController.setDefaultServerAtIndex(index)
                     }
 
                     Keys.onEnterPressed: serverRadioButton.clicked()
                     Keys.onReturnPressed: serverRadioButton.clicked()
                 }
+
+                // ---- نمایش Ping ----
+                Item {
+                    id: pingBadge
+                    implicitWidth: pingLabel.implicitWidth + 16
+                    implicitHeight: 28
+
+                    property int pingMs: PingController.getLastPing(serverId)
+
+                    // رنگ بر اساس latency
+                    property color badgeColor: {
+                        if (pingMs < 0)   return AmneziaStyle.color.mutedGray
+                        if (pingMs < 100) return "#3ecf5c"   // سبز — عالی
+                        if (pingMs < 300) return "#f5a623"   // زرد — متوسط
+                        return "#e74c3c"                      // قرمز — ضعیف
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 6
+                        color: parent.badgeColor
+                        opacity: 0.18
+                    }
+
+                    Text {
+                        id: pingLabel
+                        anchors.centerIn: parent
+                        font.pixelSize: 11
+                        font.weight: Font.Medium
+                        color: pingBadge.badgeColor
+
+                        text: {
+                            const ms = pingBadge.pingMs
+                            if (ms < 0) return qsTr("--")
+                            return ms + " ms"
+                        }
+                    }
+
+                    // رو‌به‌روز‌آوری خودکار وقتی ping آپدیت می‌شه
+                    Connections {
+                        target: PingController
+                        function onPingResultUpdated(updatedServerId, pingMs) {
+                            if (updatedServerId === serverId) {
+                                pingBadge.pingMs = pingMs
+                            }
+                        }
+                    }
+                }
+                // ---- پایان Ping ----
 
                 ImageButtonType {
                     id: serverInfoButton

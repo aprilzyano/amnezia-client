@@ -49,6 +49,25 @@ PageType {
         }
     }
 
+    // وقتی بهترین سرور مشخص شد، اگر auto-connect فعال بود، وصل می‌شیم
+    Connections {
+        target: PingController
+
+        function onPingAllFinished(bestServerId) {
+            if (root.autoBestPending && bestServerId !== "") {
+                root.autoBestPending = false
+                if (!ConnectionController.isConnected) {
+                    ServersUiController.setDefaultServer(bestServerId)
+                    connectionUiController.connectToVpn()
+                }
+            }
+            autoBestButton.enabled = true
+            autoBestButton.text = qsTr("Auto-connect to Best Server")
+        }
+    }
+
+    // فلگ برای auto-connect بعد از ping
+    property bool autoBestPending: false
 
     Item {
         objectName: "homeColumnItem"
@@ -126,6 +145,48 @@ PageType {
                 Layout.fillHeight: true
                 Layout.alignment: Qt.AlignCenter
             }
+
+            // ===== دکمه Auto-connect به بهترین سرور =====
+            BasicButtonType {
+                id: autoBestButton
+                objectName: "autoBestButton"
+
+                Layout.alignment: Qt.AlignHCenter
+                Layout.bottomMargin: 4
+                leftPadding: 20
+                rightPadding: 20
+
+                implicitHeight: 40
+
+                defaultColor: AmneziaStyle.color.translucentWhite
+                hoveredColor: AmneziaStyle.color.sheerWhite
+                pressedColor: AmneziaStyle.color.mutedGray
+                disabledColor: AmneziaStyle.color.transparent
+                textColor: AmneziaStyle.color.paleGray
+                borderWidth: 0
+
+                buttonTextLabel.font.pixelSize: 13
+                buttonTextLabel.font.weight: 500
+
+                // نمایش فقط وقتی بیش از یک سرور وجود دارد
+                visible: ServersModel.count > 1 && !ConnectionController.isConnected
+
+                text: qsTr("Auto-connect to Best Server")
+
+                leftImageSource: "qrc:/images/controls/globe.svg"
+                leftImageColor: AmneziaStyle.color.paleGray
+
+                Keys.onEnterPressed: this.clicked()
+                Keys.onReturnPressed: this.clicked()
+
+                onClicked: {
+                    autoBestButton.enabled = false
+                    autoBestButton.text = qsTr("Checking servers...")
+                    root.autoBestPending = true
+                    PingController.pingAll()
+                }
+            }
+            // ===== پایان دکمه Auto-connect =====
 
             BasicButtonType {
                 id: splitTunnelingButton
@@ -387,94 +448,78 @@ PageType {
 
                         Component.onCompleted: root.containersDropDownRef = containersDropDown
 
-                        rootButtonImageColor: AmneziaStyle.color.midnightBlack
-                        rootButtonBackgroundColor: AmneziaStyle.color.paleGray
-                        rootButtonBackgroundHoveredColor: AmneziaStyle.color.mistyGray
-                        rootButtonBackgroundPressedColor: AmneziaStyle.color.cloudyGray
-                        rootButtonHoveredBorderColor: AmneziaStyle.color.transparent
-                        rootButtonDefaultBorderColor: AmneziaStyle.color.transparent
-                        rootButtonTextTopMargin: 8
-                        rootButtonTextBottomMargin: 8
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 16
 
-                        enabled: drawer.isOpened
+                        defaultColor: AmneziaStyle.color.transparent
+                        hoveredColor: AmneziaStyle.color.translucentWhite
+                        pressedColor: AmneziaStyle.color.sheerWhite
 
-                        text: ServersUiController.defaultServerDefaultContainerName
-                        textColor: AmneziaStyle.color.midnightBlack
-                        headerText: qsTr("VPN protocol")
-                        headerBackButtonImage: "qrc:/images/controls/arrow-left.svg"
+                        textColor: AmneziaStyle.color.paleGray
+                        borderWidth: 0
 
-                        rootButtonClickedFunction: function() {
-                            containersDropDown.openTriggered()
-                        }
-
-                        drawerParent: root
+                        headerText: qsTr("Protocol")
 
                         listView: HomeContainersListView {
-                            id: containersListView
-                            objectName: "containersListView"
+                            rootWidth: containersDropDown.popupContent.width
+                            selectedText: containersDropDown.text
+                        }
 
-                            rootWidth: root.width
+                        Keys.onEnterPressed: this.clicked()
+                        Keys.onReturnPressed: this.clicked()
+                    }
 
-                            Connections {
-                                objectName: "rowLayoutConnections"
+                    // ===== دکمه Refresh Ping در drawer =====
+                    ImageButtonType {
+                        id: refreshPingButton
+                        objectName: "refreshPingButton"
 
-                                target: ServersUiController
+                        Layout.rightMargin: 16
+                        implicitWidth: 40
+                        implicitHeight: 40
 
-                                function onDefaultServerIdChanged() {
-                                    updateContainersModelFilters()
-                                }
+                        image: "qrc:/images/controls/refresh.svg"
+                        imageColor: AmneziaStyle.color.paleGray
+
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Refresh ping for all servers")
+                        ToolTip.delay: 500
+
+                        Keys.onEnterPressed: this.clicked()
+                        Keys.onReturnPressed: this.clicked()
+
+                        // انیمیشن چرخش هنگام در حال ping
+                        RotationAnimation on rotation {
+                            id: refreshAnimation
+                            running: false
+                            loops: Animation.Infinite
+                            from: 0; to: 360
+                            duration: 1000
+                        }
+
+                        onClicked: {
+                            refreshAnimation.running = true
+                            PingController.pingAll()
+                        }
+
+                        Connections {
+                            target: PingController
+                            function onPingAllFinished(bestServerId) {
+                                refreshAnimation.running = false
+                                refreshPingButton.rotation = 0
                             }
-
-                            function updateContainersModelFilters() {
-                                if (ServersUiController.isServerHasWriteAccess(ServersUiController.defaultServerId)) {
-                                    proxyDefaultServerContainersModel.filters = ContainersModelFilters.getWriteAccessProtocolsListFilters()
-                                } else {
-                                    proxyDefaultServerContainersModel.filters = ContainersModelFilters.getReadAccessProtocolsListFilters()
-                                }
-                            }
-
-                            model: SortFilterProxyModel {
-                                id: proxyDefaultServerContainersModel
-                                sourceModel: DefaultServerContainersModel
-
-                                sorters: [
-                                    RoleSorter { roleName: "isInstalled"; sortOrder: Qt.DescendingOrder }
-                                ]
-                            }
-
-                            Component.onCompleted: updateContainersModelFilters()
                         }
                     }
+                    // ===== پایان دکمه Refresh Ping =====
                 }
 
-                Header2Type {
-                    Layout.fillWidth: true
-                    Layout.topMargin: 48
-                    Layout.leftMargin: 16
-                    Layout.rightMargin: 16
-
-                    headerText: qsTr("Servers")
+                ButtonGroup {
+                    id: serversRadioButtonGroup
                 }
-            }
 
-            ButtonGroup {
-                id: serversRadioButtonGroup
-                objectName: "serversRadioButtonGroup"
-            }
-
-            ServersListView {
-                id: serversMenuContent
-                objectName: "serversMenuContent"
-
-                isFocusable: false
-
-                Connections {
-                    target: drawer
-
-                    // this item shouldn't be focused when drawer is closed
-                    function onIsOpenedChanged() {
-                        serversMenuContent.isFocusable = drawer.isOpened
-                    }
+                ServersListView {
+                    id: serversListView
+                    objectName: "serversListView"
                 }
             }
         }
