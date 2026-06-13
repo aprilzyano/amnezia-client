@@ -43,6 +43,9 @@
 #include "core/controllers/connectionController.h"
 #include "core/controllers/updateController.h"
 
+// ✅ تغییر ۱: include فایل جدید pingController
+#include "core/controllers/pingController.h"
+
 #include "core/repositories/secureServersRepository.h"
 #include "core/repositories/secureAppSettingsRepository.h"
 #include "secureQSettings.h"
@@ -193,6 +196,9 @@ private:
     ExportController* m_exportController;
     ConnectionController* m_connectionController;
     SettingsController* m_settingsController;
+
+    // ✅ تغییر ۲: اعلام متغیر pingController
+    PingController* m_pingController = nullptr;
 
     ContainersModel* m_containersModel;
     ContainersModel* m_defaultServerContainersModel;
